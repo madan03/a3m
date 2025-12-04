@@ -39,6 +39,18 @@ BASE_REPLACEMENTS = {
 
 def get_file_replacement_mapping(file_obj, unit_directory):
     mapping = BASE_REPLACEMENTS.copy()
+
+    # Defensive check for None currentlocation
+    if file_obj.currentlocation is None:
+        logger.error(
+            "File %s has None currentlocation (originallocation=%s)",
+            file_obj.pk,
+            getattr(file_obj, "originallocation", "N/A"),
+        )
+        raise ValueError(
+            f"File {file_obj.pk} has None currentlocation, cannot create replacement mapping"
+        )
+
     dirname = os.path.dirname(file_obj.currentlocation)
     name, ext = os.path.splitext(file_obj.currentlocation)
     name = os.path.basename(name)
@@ -308,6 +320,14 @@ class Package:
             files_returned_already = set()
             if queryset.exists():
                 for file_obj in queryset.iterator():
+                    # Skip files with missing currentlocation
+                    if not file_obj.currentlocation:
+                        logger.warning(
+                            "Skipping file %s with missing currentlocation in package %s",
+                            file_obj.pk,
+                            self.uuid,
+                        )
+                        continue
                     file_obj_mapped = get_file_replacement_mapping(
                         file_obj, self.current_path
                     )
