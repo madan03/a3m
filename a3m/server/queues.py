@@ -180,7 +180,12 @@ class PackageQueue:
         metrics.active_jobs_gauge.inc()
 
         result = self.executor.submit(job.run)
-        result.add_done_callback(self._job_completed_callback)
+
+        # Pass package to callback so we can deactivate on failure
+        job_done_callback = functools.partial(
+            self._job_completed_callback, job.package, job.link.id
+        )
+        result.add_done_callback(job_done_callback)
 
         if job.link.is_terminal:
             package_done_callback = functools.partial(
@@ -202,7 +207,22 @@ class PackageQueue:
         job in the chain. This function is called by an executor on completion
         of a Job.
         """
-        if future.result() is not None:
+        try:
+            result = future.result()
+        except Exception as err:
+            logger.error(
+                "Package %s failed on terminal link %s with exception: %s",
+                package.uuid,
+                link_id,
+                err,
+                exc_info=True,
+            )
+            # Package failed - still deactivate it so queue doesn't jam
+            self.deactivate_package(package)
+            self.queue_next_job()
+            return
+
+        if result is not None:
             logger.warning(
                 "Unexpectedly received another job on package completion. "
                 "Please verify the value of `end` in the workflow. Link %s.",
@@ -213,7 +233,7 @@ class PackageQueue:
         self.deactivate_package(package)
         self.queue_next_job()
 
-    def _job_completed_callback(self, future):
+    def _job_completed_callback(self, package, link_id, future):
         """Schedule the next job in the chain.
 
         Retrieve the next job from the result from the previous job. If there is
@@ -221,7 +241,21 @@ class PackageQueue:
         called by an executor on completion of a Job.
         """
         metrics.active_jobs_gauge.dec()
-        next_job = future.result()
+
+        try:
+            next_job = future.result()
+        except Exception as err:
+            logger.error(
+                "Job execution failed for package %s (link %s) with exception: %s",
+                package.uuid,
+                link_id,
+                err,
+                exc_info=True,
+            )
+            # Job failed - deactivate package so it doesn't block the queue
+            self.deactivate_package(package)
+            self.queue_next_job()
+            return
 
         if not next_job:
             return
