@@ -39,3 +39,10 @@ junit.xml
 
 # Sphinx
 _build/
+
+# Local-only project assets (do not push)
+/scripts/
+/docs/lxc-setup.md
+/docs/CHANGES-SESSION-SUMMARY.md
+/docs/changes-session-summary.md
+/docs/aip-dip-output-example.md

@@ -65,17 +65,28 @@ Create the virtual network::
 
     docker network create a3m-network
 
-Run the gRPC server in detached mode listening locally on port ``7000``::
+Run the gRPC server in detached mode listening locally on port ``7000``.
+If you plan to submit transfers from local paths (``file://``), mount the
+transfer source directory **in the server container** so the server can read it::
 
     docker run --rm --network a3m-network --name a3md --detach --publish 7000:7000 \
+        --volume="/path/to/your/transfers:/data/transfers" \
         ghcr.io/artefactual-labs/a3m:latest
 
-Submit a new transfer using the gRPC client::
+Submit a new transfer using the gRPC client. For a remote URL::
 
     docker run --rm --network a3m-network --name a3mc --interactive --tty --entrypoint=python \
         ghcr.io/artefactual-labs/a3m:latest \
             -m a3m.cli.client --address=a3md:7000 \
                 https://github.com/artefactual/archivematica-sampledata/raw/master/SampleTransfers/ZippedDirectoryTransfers/DemoTransferCSV.zip
+
+For a **local directory or file** (``file://``), the path is resolved **on the
+server** (a3md). Ensure the transfer source is mounted in the **a3md** container
+(as in the ``docker run`` for a3md above). Then pass that path to the client::
+
+    docker run --rm --network a3m-network --interactive --tty \
+        --entrypoint a3m ghcr.io/artefactual-labs/a3m:latest \
+        --address=a3md:7000 --name=transfer1 --no-input file:///data/transfers/transfer1
 
 We have produced an AIP that is stored inside the `a3md` container. The previous
 demo in this document shows how we can use Docker volumes to retrieve the AIP.

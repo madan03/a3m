@@ -115,6 +115,8 @@ def getAMAgentsForFile(fileUUID):
 
     :returns: A list of Agent IDs
     """
+    if fileUUID is None:
+        return []
     try:
         f = File.objects.get(uuid=fileUUID)
     except File.DoesNotExist:
@@ -173,9 +175,12 @@ def insertIntoEvents(
     if not eventIdentifierUUID:
         eventIdentifierUUID = str(uuid.uuid4())
 
+    # Event.file_uuid is a FK to File; use None for AIP-level events (e.g. fixity check)
+    file_uuid_id = fileUUID if fileUUID else None
+
     event = Event.objects.create(
         event_id=eventIdentifierUUID,
-        file_uuid_id=fileUUID,
+        file_uuid_id=file_uuid_id,
         event_type=eventType,
         event_datetime=eventDateTime,
         event_detail=eventDetail,

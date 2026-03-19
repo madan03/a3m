@@ -40,10 +40,14 @@ def extract_aip(job, aip_path, extract_path):
 def write_premis_event(
     job, sip_uuid, checksum_type, event_outcome, event_outcome_detail_note
 ):
-    """Write the AIP-level "fixity check" PREMIS event."""
+    """Write the AIP-level "fixity check" PREMIS event.
+
+    Pass fileUUID=None so the event is not linked to a File (Event.file_uuid
+    is a FK to File; sip_uuid is not a File UUID).
+    """
     try:
         databaseFunctions.insertIntoEvents(
-            fileUUID=sip_uuid,
+            fileUUID=None,
             eventType="fixity check",
             eventDetail='program="python, bag"; module="hashlib.{}()"'.format(
                 checksum_type

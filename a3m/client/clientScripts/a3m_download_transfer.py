@@ -69,28 +69,50 @@ def _extract(job, path, destination):
     return output_dir
 
 
-def _transfer_file(job, path, transfer_path, transfer_id, copy=False):
-    """Create a transfer from a single file.
+# Subdirectory under the transfer where content must live; the workflow
+# (assign_file_uuids, characterize_file, etc.) expects paths under objects/.
+OBJECTS_SUBDIR = "objects"
 
-    Extraction is attempted, but the file is used as-is if it failed.
+
+def _transfer_file(job, path, transfer_path, transfer_id, copy=False):
+    """Create a transfer from a single file or directory.
+
+    Content is placed under transfer_path/objects/ so that File records
+    get currentlocation like %transferDirectory%objects/... as expected
+    by the rest of the workflow.
+    Extraction is attempted for archives; the file is used as-is if it failed.
     """
+    objects_dir = Path(transfer_path) / OBJECTS_SUBDIR
     with _create_tmpdir(transfer_id, purpose="transfer") as tmp_dir:
         if _archived(path):
             src = _extract(job, path, tmp_dir)
         else:
             src = path
 
+        objects_dir.mkdir(parents=True, mode=0o770)
+
         if not copy:
-            transfer_path.mkdir(mode=0o770)
-            shutil.move(str(src), str(transfer_path))
+            if src.is_dir():
+                for item in src.iterdir():
+                    dest = objects_dir / item.name
+                    if item.is_dir():
+                        shutil.copytree(str(item), str(dest), symlinks=False)
+                    else:
+                        shutil.copy2(str(item), str(dest), follow_symlinks=False)
+            else:
+                shutil.move(str(src), str(objects_dir / src.name))
             return
 
         if src.is_dir():
-            shutil.copytree(str(src), str(transfer_path), symlinks=False)
+            for item in src.iterdir():
+                dest = objects_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(str(item), str(dest), symlinks=False)
+                else:
+                    shutil.copy2(str(item), str(dest), follow_symlinks=False)
             return
 
-        transfer_path.mkdir(mode=0o770)
-        shutil.copy2(str(src), str(transfer_path), follow_symlinks=False)
+        shutil.copy2(str(src), str(objects_dir / src.name), follow_symlinks=False)
 
 
 def _process_http_url(job, url, transfer_path, transfer_id):
@@ -120,7 +142,14 @@ def _process_file_url(job, path, transfer_path, transfer_id):
         raise RetrievalError("Symlinks are not supported")
 
     if path.is_dir():
-        shutil.copytree(str(path), str(transfer_path), symlinks=False)
+        objects_dir = Path(transfer_path) / OBJECTS_SUBDIR
+        objects_dir.mkdir(parents=True, mode=0o770)
+        for item in path.iterdir():
+            dest = objects_dir / item.name
+            if item.is_dir():
+                shutil.copytree(str(item), str(dest), symlinks=False)
+            else:
+                shutil.copy2(str(item), str(dest), follow_symlinks=False)
         return
 
     if not path.is_file():
@@ -153,7 +182,7 @@ def main(job, transfer_id, transfer_path, url):
         job.pyprint(f"Error retrievent contents: {err}", file=sys.stderr)
         return 1
 
-    if is_bag(transfer_path):
+    if is_bag(Path(transfer_path) / OBJECTS_SUBDIR):
         job.pyprint("Bags not supported yet!", file=sys.stderr)
         return 1
 

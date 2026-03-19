@@ -16,6 +16,11 @@ def call(jobs):
 
             os.makedirs(submission_docs_dir, mode=0o770, exist_ok=True)
 
+            if not os.path.isdir(source_dir):
+                # No submission documentation in this transfer; leave target empty.
+                job.set_status(0)
+                continue
+
             exit_code, std_out, std_error = executeOrRun(
                 "command",
                 ["cp", "-R", source_dir, submission_docs_dir],

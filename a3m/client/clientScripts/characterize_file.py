@@ -60,7 +60,9 @@ def main(job, file_path, file_uuid, sip_uuid):
         else:
             rd = ReplacementDict.frommodel(file_=file_uuid, sip=sip_uuid, type_="file")
             args = rd.to_gnu_options()
-            command_to_execute = rule.command.command
+            # Replace placeholders in the command string (e.g. %fileFullName%) so
+            # tools like ffprobe/exiftool receive the actual path.
+            command_to_execute = rd.replace(rule.command.command)[0]
 
         exitstatus, stdout, stderr = executeOrRun(
             rule.command.script_type.value,
